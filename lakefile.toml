@@ -1,0 +1,10 @@
+name = "kuramoto"
+defaultTargets = ["Kuramoto"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "ed72f1faaeee9bea5805932ae309af92264cd8d1"
+
+[[lean_lib]]
+name = "Kuramoto"

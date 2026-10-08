@@ -1,0 +1,607 @@
+\documentclass[11pt]{amsart}
+\usepackage[margin=1.1in]{geometry}
+\usepackage{amssymb,amsmath,amsthm}
+\usepackage[T1]{fontenc}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+
+% Lean identifiers, typeset in typewriter with discretionary breaks after dots.
+\newcommand{\leanname}[1]{\texttt{\textcolor{black!75}{#1}}}
+\newcommand{\lfile}[1]{\texttt{#1}}
+\newcommand{\E}{\mathcal{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\PP}{\mathbb{P}}
+\newcommand{\one}{\mathbf{1}}
+\newcommand{\Q}{Q_{\ell,R}}
+\newcommand{\Gnt}{G_{n,3}}
+\DeclareMathOperator{\arcsinop}{arcsin}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{axiom}[theorem]{Assumed result}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\title[Lean to \TeX{} companion]{Random $3$-regular graphs are not globally synchronizing:\\
+a natural-language guide to the Lean formalization}
+\author{Ciro Carvallo, Pablo Groisman, Dieter Mitsche}
+\date{}
+
+\begin{document}
+\sloppy
+
+\begin{abstract}
+This document renders the Lean~4 formalization of \emph{Random $3$-regular graphs are not
+globally synchronizing} (\href{https://arxiv.org/abs/2610.09135}{arXiv:2610.09135}) in
+mathematical prose. Each section corresponds to one Lean file, in the order of the paper, and
+every definition and result is labelled with its Lean name, written
+\leanname{like\_this}. It is a reading aid: the Lean source is authoritative, and where the two
+differ, the Lean statement is the one that has been checked. Small auxiliary lemmas are omitted.
+\end{abstract}
+
+\maketitle
+\tableofcontents
+
+\section*{Overview}
+
+The main result is
+\[
+  \lim_{n\to\infty}\PP\bigl(G_{2n,3}\text{ is not globally synchronizing}\bigr)=1,
+\]
+Theorem~1.2 of the paper and \leanname{Kuramoto.main\_theorem} in Lean (Theorem~\ref{thm:main}
+below). Everything is proved from Mathlib and Lean's standard axioms, except for four published
+results stated as Lean \texttt{axiom}s:
+\begin{enumerate}
+\item \leanname{NK.newton\_kantorovich}: Kantorovich's theorem (Assumed result~\ref{ax:nk});
+\item \leanname{Random.friedman}: Friedman's second eigenvalue theorem (Assumed result~\ref{ax:friedman});
+\item \leanname{Random.cycles\_poisson}: Poisson limit of short cycle counts, Bollob\'as and
+  Wormald (Assumed result~\ref{ax:cycles});
+\item \leanname{Random.simple\_prob\_pos}: a random configuration is simple with probability
+  bounded away from $0$, Bender--Canfield and Bollob\'as (Assumed result~\ref{ax:simple}).
+\end{enumerate}
+The command \texttt{\#print axioms Kuramoto.main\_theorem} lists exactly these four besides
+\texttt{propext}, \texttt{Classical.choice} and \texttt{Quot.sound}.
+
+\medskip
+\noindent\emph{Conventions.} A graph is a Mathlib \texttt{SimpleGraph} on a finite type $V$.
+Configurations are real vectors $\theta\in\R^V$, lifts of points of the torus. For a vector
+$x\in\R^V$ we write $\|x\|$ for its Euclidean norm, and $x\perp\one$ for $\sum_v x_v=0$.
+
+%=====================================================================
+\section{The Kuramoto model on a finite graph (\lfile{Basic.lean})}
+
+\begin{definition}[\leanname{energy}, \leanname{grad}, \leanname{hess}]
+For $\theta\in\R^V$,
+\[
+\E(\theta)=\tfrac12\sum_{u}\sum_{v\sim u}\bigl(1-\cos(\theta_u-\theta_v)\bigr),\qquad
+\nabla\E(\theta)_x=\sum_{y\sim x}\sin(\theta_x-\theta_y),
+\]
+and $H(\theta)$ is the matrix with $H_{uu}=\sum_{y\sim u}\cos(\theta_u-\theta_y)$,
+$H_{uv}=-\cos(\theta_u-\theta_v)$ for $u\sim v$, and $0$ otherwise. These are equations (2)
+and (3) of the paper.
+\end{definition}
+
+\begin{lemma}[\leanname{quadForm\_hess}]\label{lem:quadform}
+For all $\theta,x\in\R^V$,
+$\displaystyle \langle x,H(\theta)x\rangle=\tfrac12\sum_u\sum_{v\sim u}\cos(\theta_u-\theta_v)\,(x_u-x_v)^2.$
+\end{lemma}
+\begin{proof}
+Split $H$ into its diagonal and off-diagonal parts (\leanname{hess\_eq\_add}) and symmetrize the
+double sum over ordered adjacent pairs (\leanname{sum\_neighbor\_comm}).
+\end{proof}
+
+\begin{definition}[\leanname{phaseDiff}]
+$\Delta_{uv}(\theta)\in(-\pi,\pi]$ is the representative of $\theta_v-\theta_u$ modulo $2\pi$,
+defined via Mathlib's \texttt{Real.Angle.toReal}.
+\end{definition}
+
+\begin{lemma}[\leanname{phaseDiff\_eq}, \leanname{abs\_phaseDiff\_le\_iff}, \leanname{cos\_eq\_cos\_phaseDiff}]
+If $\theta_v-\theta_u-2\pi k\in(-\pi,\pi]$ for some $k\in\Z$, then
+$\Delta_{uv}=\theta_v-\theta_u-2\pi k$. For $a<\pi$,
+$|\Delta_{uv}|\le a$ if and only if $|\theta_u-\theta_v-2\pi k|\le a$ for some $k\in\Z$.
+Finally $\cos(\theta_u-\theta_v)=\cos\Delta_{uv}$.
+\end{lemma}
+
+\begin{definition}[\leanname{PhaseCohesive}, \leanname{Synchronized}, \leanname{OnePerp}]
+$\theta$ is \emph{phase-cohesive} if $\cos(\theta_u-\theta_v)>0$ for every edge $uv$;
+\emph{synchronized} if $\cos(\theta_u-\theta_v)=1$ for all $u,v$, that is, all phases agree
+modulo $2\pi$. A vector $x$ satisfies \leanname{OnePerp} if $\sum_v x_v=0$.
+\end{definition}
+
+\begin{lemma}[\leanname{phaseCohesive\_iff}]
+$\theta$ is phase-cohesive if and only if $|\Delta_e(\theta)|<\pi/2$ for every edge $e$.
+\end{lemma}
+
+\begin{definition}[\leanname{IsEquilibrium}, \leanname{StableEquilibrium}]
+$\theta$ is an \emph{equilibrium} if $\nabla\E(\theta)=0$. It is a \emph{stable equilibrium} if,
+moreover, $\langle x,H(\theta)x\rangle>0$ for every nonzero $x\perp\one$, that is,
+$\lambda_2(H(\theta))>0$.
+\end{definition}
+
+\begin{lemma}[\leanname{quadForm\_hess\_one}]
+$\langle\one,H(\theta)\one\rangle=0$. Hence positive definiteness can only hold on $\one^\perp$.
+\end{lemma}
+
+\begin{definition}[\leanname{GloballySynchronizing}]\label{def:gs}
+$G$ is \emph{globally synchronizing} if every stable equilibrium of $G$ is synchronized.
+\end{definition}
+
+\begin{remark}
+Definition~1.1 of the paper is dynamical: from a uniformly random initial state the gradient
+flow converges to a synchronized state with probability one. Definition~\ref{def:gs} is the
+landscape version. The proof of Theorem~1.2 produces a stable non-synchronized equilibrium; that
+this rules out global synchronization in the dynamical sense is the remark following
+Definition~1.1 in the paper (Lyapunov stability of a strict local minimum of a gradient flow),
+which is not formalized.
+\end{remark}
+
+%=====================================================================
+\section{Proposition 1.3: the stability criterion (\lfile{Certificate.lean})}
+
+\begin{lemma}[\leanname{quadForm\_hess\_nonneg}, \leanname{quadForm\_hess\_eq\_zero\_iff\_const}]
+If $\theta$ is phase-cohesive then $\langle x,H(\theta)x\rangle\ge0$ for all $x$. If moreover $G$
+is connected and $\langle x,H(\theta)x\rangle=0$, then $x$ is constant.
+\end{lemma}
+\begin{proof}
+By Lemma~\ref{lem:quadform} the form is a sum of nonnegative terms with positive weights; if
+it vanishes, $x_u=x_v$ along every edge, hence along every walk.
+\end{proof}
+
+\begin{proposition}[Proposition 1.3; \leanname{prop\_cert}]\label{prop:cert}
+Let $G$ be connected and let $\theta$ satisfy $\nabla\E(\theta)=0$, $|\Delta_e(\theta)|<\pi/2$
+for every edge $e$, and $\Delta_{e_0}(\theta)\ne0$ for some edge $e_0$. Then $\theta$ is a stable
+equilibrium that is not synchronized.
+\end{proposition}
+\begin{proof}
+Stability: a nonzero $x\perp\one$ with $\langle x,Hx\rangle=0$ would be a nonzero constant
+orthogonal to $\one$ (\leanname{stableEquilibrium\_of\_phaseCohesive}). Non-synchronization:
+$\cos\Delta_{e_0}=1$ with $\Delta_{e_0}\in(-\pi,\pi]$ forces $\Delta_{e_0}=0$.
+\end{proof}
+
+\begin{corollary}[\leanname{not\_globallySynchronizing\_of\_certificate}]
+Under the same hypotheses (with nontriviality phrased as $\cos(\theta_{u_0}-\theta_{v_0})\ne1$
+for an edge $u_0v_0$), $G$ is not globally synchronizing.
+\end{corollary}
+
+%=====================================================================
+\section{The gadget $\Q$ and Proposition 2.1 (\lfile{Gadget.lean})}
+
+\subsection{The graph}
+
+\begin{definition}[\leanname{Gadget.Vtx}, \leanname{Gadget.Q}]
+The vertices of $\Q$ are the cycle vertices $\mathrm{cyc}(i)$, $i\in\Z/\ell\Z$, and the branch
+vertices $\mathrm{brn}(i,k,b)$ with $0\le k<R$ and $0\le b<2^k$; the latter sits at depth $k+1$
+in the binary tree hanging from $\mathrm{cyc}(i)$. The edges join $\mathrm{cyc}(i)$ to
+$\mathrm{cyc}(i+1)$, $\mathrm{cyc}(i)$ to $\mathrm{brn}(i,0,0)$ (the pendant edge), and
+$\mathrm{brn}(i,k,b)$ to its two children $\mathrm{brn}(i,k+1,2b)$, $\mathrm{brn}(i,k+1,2b+1)$.
+The \emph{leaves} are the vertices at depth $R$.
+\end{definition}
+
+\begin{lemma}[\leanname{Gadget.card\_vtx}, \leanname{Gadget.degree\_eq\_three}]
+$|V(\Q)|=2^R\ell$, and for $\ell\ge3$ every non-leaf vertex has degree $3$.
+\end{lemma}
+
+\subsection{The configuration $\theta^\eta$}
+
+\begin{definition}[\leanname{Gadget.sgn}, \leanname{Gadget.phase}; eqs.\ (4)--(6)]
+For $\eta\in\R$ and $k\ge0$ let $\Delta_k=\arcsin(2^{-k}\sin\eta)$, and let $\varepsilon_i=+1$
+if $i\bmod4\in\{0,1\}$ and $-1$ otherwise. Then
+\[
+\theta^\eta(\mathrm{cyc}(i))=\varepsilon_i\Bigl(\pi-\frac\eta2\Bigr),\qquad
+\theta^\eta(\mathrm{brn}(i,k,b))=\varepsilon_i\Bigl(\pi-\frac\eta2-\sum_{j=0}^{k}\Delta_j\Bigr).
+\]
+\end{definition}
+
+\begin{lemma}[\leanname{Gadget.sin\_}$\Delta$\leanname{\_succ}, \leanname{Gadget.sgn\_neighbors}]
+$\sin\Delta_{k+1}=\tfrac12\sin\Delta_k$. If $4\mid\ell$, then of the two cycle neighbours of
+$i$, exactly one has the same sign as $i$ and the other the opposite sign.
+\end{lemma}
+
+\begin{proposition}[Proposition 2.1(i); \leanname{Gadget.grad\_eq\_zero\_of\_nonleaf}]\label{prop:21i}
+Let $4\mid\ell$, $\ell\ge3$, $0<\eta<\pi/2$. Then $\nabla\E(\theta^\eta)=0$ at every non-leaf
+vertex of $\Q$.
+\end{proposition}
+\begin{proof}
+At a cycle vertex the two cycle edges carry $0$ and $\pm\eta$ (by \leanname{sgn\_neighbors}),
+cancelled by the pendant edge. At a branch vertex at depth $k$ the parent edge carries
+$\sin\Delta_{k-1}=2\sin\Delta_k$, balanced by the two child edges.
+\end{proof}
+
+\begin{proposition}[Proposition 2.1(ii); \leanname{Gadget.phaseCohesive\_phase},
+\leanname{Gadget.abs\_phaseDiff\_phase\_le}, \leanname{Gadget.absDelta\_branch}]
+Let $4\mid\ell$ and $0<\eta<\pi/2$. Then $\theta^\eta$ is phase-cohesive on $\Q$,
+$|\Delta_e(\theta^\eta)|\le\eta$ for every edge, and $\Delta_k\le\frac\pi2\,2^{-k}$.
+\end{proposition}
+
+\subsection{The leaf equation and its root}
+
+\begin{definition}[\leanname{Gadget.GG}; eq.\ (8)]
+$\displaystyle G_R(\eta)=\pi-\tfrac32\eta-\sum_{k=1}^{R-1}\arcsin\bigl(2^{-k}\sin\eta\bigr).$
+\end{definition}
+
+\begin{lemma}[\leanname{Gadget.leaf\_phase\_eq\_zero\_iff}]
+For $0<\eta<\pi/2$, a leaf of $\Q$ has phase $0$ under $\theta^\eta$ if and only if
+$G_R(\eta)=0$.
+\end{lemma}
+
+\begin{lemma}[\leanname{Gadget.GG\_strictAnti}, \leanname{Gadget.GG\_zero}, \leanname{Gadget.GG\_pi\_div\_two\_neg}]
+$G_R$ is strictly decreasing on $[0,\pi/2]$, $G_R(0)=\pi$, and for $R\ge4$,
+$G_R(\pi/2)\le G_4(\pi/2)=\frac\pi4-\frac\pi6-\arcsin\frac14-\arcsin\frac18<0$.
+\end{lemma}
+
+\begin{proposition}[Proposition 2.1(iii); \leanname{Gadget.exists\_unique\_root},
+\leanname{Gadget.root}, \leanname{Gadget.etabounds}]\label{prop:21iii}
+For $R\ge4$ there is a unique $\eta^*(R)\in(0,\pi/2)$ with $G_R(\eta^*(R))=0$. Moreover
+$\eta^*$ is strictly decreasing in $R$ (\leanname{Gadget.root\_strictAnti}), and with
+$\delta_0:=\pi/2-\eta^*(4)>0$,
+\[
+\tfrac49\pi<\eta^*(R)\le\tfrac\pi2-\delta_0\qquad\text{for all }R\ge4 .
+\]
+Also $\delta_0<\pi/18$ (\leanname{Gadget.}$\delta_0$\leanname{\_lt}).
+\end{proposition}
+\begin{proof}
+Existence and uniqueness by the intermediate value theorem and strict monotonicity
+(\leanname{Gadget.GG\_continuous}). Monotonicity in $R$ because $G_{R+1}=G_R-\arcsin(2^{-R}\sin\eta)$
+(\leanname{Gadget.GG\_sub\_GG}). The lower bound uses $\arcsin x\le\frac\pi3x$ on $[0,\frac12]$
+(\leanname{Gadget.arcsin\_le\_pi\_div\_three\_mul}, from concavity of $\sin$), which gives
+$G_R(4\pi/9)>0$ (\leanname{Gadget.GG\_pos\_four\_ninths\_pi}).
+\end{proof}
+
+%=====================================================================
+\section{Kantorovich's theorem and Lemma 3.2 (\lfile{Kantorovich.lean})}
+
+\begin{axiom}[Theorem 3.1; \leanname{NK.newton\_kantorovich}]\label{ax:nk}
+Let $E$ be a real Banach space, $F:E\to E$ differentiable with derivative $F'$, and $F'$
+$K$-Lipschitz. Let $\theta_0\in E$ with $F'(\theta_0)$ invertible, $h_0=\|F'(\theta_0)^{-1}F(\theta_0)\|$,
+and $K\,\|F'(\theta_0)^{-1}\|\,h_0\le\frac12$. Then $F(\theta)=0$ for some $\theta$ with
+$\|\theta-\theta_0\|\le2h_0$.
+\end{axiom}
+\noindent Kantorovich--Akilov, \emph{Functional Analysis}, Ch.~XVIII, Thm.~6. The paper's version
+is stated on an open $X\subseteq\R^m$ with uniqueness; it is applied with $X$ the whole space,
+and uniqueness is not used.
+
+\begin{lemma}[\leanname{sum\_sq\_diff\_le}]
+On a $3$-regular graph, $\sum_u\sum_{v\sim u}(x_u-x_v)^2\le12\,\|x\|^2$.
+\end{lemma}
+
+\begin{lemma}[Lemma 3.2; \leanname{lipschitz\_hess}]
+On a $3$-regular graph, for all $\theta,\theta',x$,
+$\bigl|\langle x,H(\theta)x\rangle-\langle x,H(\theta')x\rangle\bigr|\le6\sqrt2\,\|\theta-\theta'\|\,\|x\|^2$.
+\end{lemma}
+\begin{proof}
+$|\cos a-\cos b|\le|a-b|$, $|w_u-w_v|\le\sqrt2\|w\|$ (\leanname{abs\_sub\_le\_sqrt\_two\_mul}),
+and the previous lemma.
+\end{proof}
+
+%=====================================================================
+\section{The configuration $\hat\theta$ in $G$ (\lfile{Transplant.lean})}
+
+\begin{definition}[\leanname{IsInducedCopy}, \leanname{IsGadgetBall}]
+A map $f:V(\Q)\to V(G)$ is an \emph{induced copy} if it is injective and
+$f(w)\sim_G f(w')\iff w\sim_Q w'$. It is a \emph{gadget ball} if moreover every $G$-neighbour of
+$f(w)$, $w$ a non-leaf vertex, lies in the image of $f$.
+\end{definition}
+
+\begin{lemma}[\leanname{isGadgetBall\_of\_induced}]
+In a $3$-regular graph, every induced copy of $\Q$ ($\ell\ge3$) is a gadget ball.
+\end{lemma}
+\begin{proof}
+A non-leaf vertex $w$ has three $\Q$-neighbours, whose images are three distinct $G$-neighbours
+of $f(w)$; since $\deg_G f(w)=3$ these are all of them.
+\end{proof}
+
+\begin{definition}[\leanname{transplant}]
+$\hat\theta=\theta^\eta\circ f^{-1}$ on the image of $f$, and $0$ elsewhere.
+\end{definition}
+
+\begin{lemma}[\leanname{grad\_transplant\_interior}, \leanname{grad\_transplant\_eq\_zero\_of\_induced},
+\leanname{grad\_transplant\_outside}]\label{lem:transplantgrad}
+Let $f$ be a gadget ball. At a non-leaf vertex $f(w)$, $\nabla\E(\hat\theta)_{f(w)}=\nabla\E(\theta^\eta)_w$;
+in particular it vanishes (Proposition~2.1(i) inside $G$). If every leaf has phase $0$, then
+$\nabla\E(\hat\theta)$ also vanishes outside the image of $f$.
+\end{lemma}
+
+\begin{lemma}[\leanname{grad\_transplant\_leaf}, \leanname{norm\_grad\_transplant\_le}]
+If $R\ge4$, $\ell\equiv0\pmod4$ and $\eta=\eta^*(R)$, then at the leaf $f(\mathrm{brn}(i,R-1,b))$ the
+gradient is $-\varepsilon_i\sin\Delta_{R-1}$, and
+\[
+\|\nabla\E(\hat\theta)\|\le\varepsilon_\ell(R):=\sqrt\ell\,\sin\eta^*(R)\,2^{-(R-1)/2}
+\qquad(\leanname{gradNorm}).
+\]
+\end{lemma}
+\begin{proof}
+The gradient is supported on the $\ell2^{R-1}$ leaves, each carrying
+$|\sin\Delta_{R-1}|=2^{-(R-1)}\sin\eta^*$.
+\end{proof}
+
+\begin{definition}[Threshold $R_0$ of Proposition 3.3; \leanname{R}$_0$]
+$\displaystyle R_0(\mu,\delta,\ell)=\max\Bigl\{4,\Bigl\lceil1+2\log_2\frac{12\sqrt{2\ell}}{\mu^2}\Bigr\rceil,
+\Bigl\lceil2+2\log_2\frac{2\sqrt{2\ell}}{\mu\delta}\Bigr\rceil\Bigr\}\in\N.$
+\end{definition}
+
+\begin{lemma}[\leanname{edge\_move\_le}, \leanname{phaseCohesive\_of\_close}, \leanname{sqrt\_two\_mul\_gradNorm\_lt}]
+$|(\theta'_u-\theta'_v)-(\hat\theta_u-\hat\theta_v)|\le\sqrt2\,\|\theta'-\hat\theta\|$. If every
+edge has $|\hat\theta_u-\hat\theta_v-2\pi k|\le\pi/2-\delta$ for some $k$ and every phase
+difference moves by less than $\delta$, then $\theta'$ is phase-cohesive. If $\mu,\delta,\ell>0$ and
+$R\ge R_0(\mu,\delta,\ell)$, then $\sqrt2\cdot2\varepsilon_\ell(R)/\mu<\delta$.
+\end{lemma}
+
+%=====================================================================
+\section{Proposition 3.3: correcting $\hat\theta$ (\lfile{Correction.lean})}
+
+\subsection{The setting on $\one^\perp$}
+
+\begin{lemma}[\leanname{sum\_grad}, \leanname{sum\_hessL}]
+$\sum_u\nabla\E(\theta)_u=0$ and $\sum_u(H(\theta)y)_u=0$.
+\end{lemma}
+
+\begin{definition}[\leanname{onePerp}, \leanname{center}, \leanname{gradP}, \leanname{hessP}]
+$\one^\perp\subseteq\R^V$ with the Euclidean norm; $\operatorname{center}(\theta)=\theta-\mathrm{mean}(\theta)\one$;
+$F=\nabla\E|_{\one^\perp}:\one^\perp\to\one^\perp$ and $F'(\theta)=H(\theta)|_{\one^\perp}$.
+Centering changes no phase difference, hence neither $\nabla\E$ nor $H$
+(\leanname{grad\_center}, \leanname{hessL\_center}).
+\end{definition}
+
+\begin{lemma}[\leanname{hasFDerivAt\_gradFull}, \leanname{hasFDerivAt\_gradP}]
+$D(\nabla\E)(\theta)=H(\theta)$ on $\R^V$, and $F$ is differentiable on $\one^\perp$ with
+derivative $F'$.
+\end{lemma}
+
+\begin{lemma}[\leanname{norm\_hessL\_sub\_le}, \leanname{lipschitz\_hessP}]
+On a $3$-regular graph, $\|H(\theta)-H(\theta')\|_{\mathrm{op}}\le6\sqrt2\,\|\theta-\theta'\|$;
+hence $F'$ is $6\sqrt2$-Lipschitz on $\one^\perp$ (Lemma~3.2 in operator norm).
+\end{lemma}
+
+\begin{lemma}[\leanname{exists\_hessPEquiv}]
+If $\langle x,H(\hat\theta)x\rangle\ge\mu\|x\|^2$ for every $x\perp\one$, with $\mu>0$, then
+$F'(\hat\theta)$ is an isomorphism of $\one^\perp$ with $\|F'(\hat\theta)^{-1}\|\le1/\mu$.
+\end{lemma}
+
+\begin{lemma}[\leanname{kantorovich\_condition}, \leanname{kantorovich\_step}]
+If $R\ge R_0(\mu,\delta,\ell)$ then $6\sqrt2\cdot\frac1\mu\cdot\frac{\varepsilon_\ell(R)}\mu\le\frac12$.
+Consequently, if $G$ is $3$-regular and connected, $\lambda_2(H(\hat\theta))\ge\mu>0$ in the above
+sense, and $\|\nabla\E(\hat\theta)\|\le\varepsilon$ with $6\sqrt2\,\varepsilon/\mu^2\le\frac12$, there is
+an equilibrium $\theta^*\perp\one$ with $\|\theta^*-\operatorname{center}(\hat\theta)\|\le2\varepsilon/\mu$.
+\end{lemma}
+\begin{proof}
+Assumed result~\ref{ax:nk} applied to $F$ on $\one^\perp$ at $\operatorname{center}(\hat\theta)$, with
+$K=6\sqrt2$ and $h_0\le\varepsilon/\mu$.
+\end{proof}
+
+\subsection{Proposition 3.3}
+
+\begin{lemma}[\leanname{transplant\_near}, \leanname{phaseDiff\_transplant\_cycle\_edge}, \leanname{connected\_of\_hess\_gap}]
+For a gadget ball with $R\ge4$ and $\eta=\eta^*(R)$, every edge of $G$ has
+$|\hat\theta_u-\hat\theta_v-2\pi k|\le\eta^*(R)$ for some $k$, and there is a cycle edge
+$f(\mathrm{cyc}(0))f(\mathrm{cyc}(j))$ with $\Delta(\hat\theta)=\eta^*(R)$ across it
+(\leanname{exists\_cycle\_edge}). If $\langle x,H(\theta)x\rangle\ge\mu\|x\|^2$ on $\one^\perp$
+with $\mu>0$, then $G$ is connected.
+\end{lemma}
+
+\begin{proposition}[Proposition 3.3; \leanname{glue}]\label{prop:glue}
+Let $\ell\equiv0\pmod4$, $\delta\in(0,\delta_0]$, $\mu>0$, $R\ge R_0(\mu,\delta,\ell)$, and let $G$ be
+$3$-regular containing $\Q$ as an induced subgraph via $f$. Let $\hat\theta$ be the transplant of
+$\theta^{\eta^*(R)}$. If $\langle x,H(\hat\theta)x\rangle\ge\mu\|x\|^2$ for all $x\perp\one$, then
+there is $\theta^*\perp\one$ with
+\begin{enumerate}
+\item[(i)] $\|\theta^*-\operatorname{center}(\hat\theta)\|\le2\varepsilon_\ell(R)/\mu$;
+\item[(ii)] $|\Delta_e(\theta^*)|<\pi/2$ for every edge $e$;
+\item[(iii)] $\nabla\E(\theta^*)=0$, and on a cycle edge $12$ with $\Delta_{12}(\hat\theta)=\eta^*(R)$,
+  $\Delta_{12}(\theta^*)\ge\eta^*(R)-\delta>0$.
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+Connectedness, $R\ge4$ and the vanishing of the leaf phases are derived from the hypotheses.
+Proposition~\ref{prop:21iii} and $\delta\le\delta_0$ give $|\Delta_e(\hat\theta)|\le\pi/2-\delta$
+on every edge. Apply \leanname{kantorovich\_step} with the gradient bound of
+\leanname{norm\_grad\_transplant\_le}; the third entry of $R_0$ makes every phase difference move
+by less than $\delta$, which gives (ii) and (iii).
+\end{proof}
+
+\begin{corollary}[\leanname{glue\_consequently}]
+Under the hypotheses of Proposition~\ref{prop:glue}, $\theta^*$ is a stable non-synchronized
+equilibrium, and $G$ is not globally synchronizing.
+\end{corollary}
+
+%=====================================================================
+\section{The random graph and Friedman's theorem (\lfile{RandomGraph.lean})}
+
+\begin{definition}[\leanname{Random.regularGraphs}, \leanname{Random.Gnt}, \leanname{Random.prob}]
+$\Gnt$ is the uniform distribution on the simple $3$-regular graphs with vertex set
+$\{0,\dots,n-1\}$ (the empty graph if there are none), and $\PP(\Gnt\in s)$ is its outer
+measure. All statements about $\Gnt$ are for even $n$; the paper's $G_{2n,3}$ is $\Gnt$ at $2n$.
+\end{definition}
+
+\begin{definition}[\leanname{Random.lambda2}, \leanname{Random.SpectralGap}]
+$\lambda_2(A)$ is the second largest eigenvalue of the adjacency matrix $A$, from Mathlib's
+eigenvalues of a Hermitian matrix sorted in decreasing order. $G$ has \emph{spectral gap $\gamma$}
+if $\langle x,Lx\rangle\ge\gamma\|x\|^2$ for all $x\perp\one$, where $L=H(0)$ is the Laplacian.
+\end{definition}
+
+\begin{axiom}[\leanname{Random.friedman}]\label{ax:friedman}
+For all $\varepsilon,\eta>0$, for all sufficiently large even $n$,
+$\PP\bigl(\lambda_2(A(\Gnt))>2\sqrt2+\varepsilon\bigr)\le\eta$.
+\end{axiom}
+\noindent J.~Friedman, \emph{A proof of Alon's second eigenvalue conjecture}, Mem.\ AMS (2008).
+
+\begin{lemma}[\leanname{Random.quadForm\_hess\_zero}, \leanname{Random.spectralGap\_of\_lambda2}]
+On a $3$-regular graph, $\langle x,Lx\rangle=3\|x\|^2-\langle x,Ax\rangle$; and if the graph has
+at least two vertices and $\lambda_2(A)\le c$, then it has spectral gap $3-c$.
+\end{lemma}
+\begin{proof}
+Expand $x$ in an orthonormal eigenbasis of $A$ (\leanname{Random.inner\_toEuclideanLin\_le}). If
+$c<3$, all eigenvalues but the top one are $\le c$ (\leanname{Random.exists\_top\_index}), and since
+$A\one=3\one$ the top eigenvector is proportional to $\one$, so $x\perp\one$ has no component
+along it.
+\end{proof}
+
+%=====================================================================
+\section{Extending a cycle to $\Q$ (\lfile{Extension.lean})}
+
+\begin{definition}[\leanname{Sparse}, \leanname{HasCycle}]
+$G$ is \emph{$M$-sparse} if every set $S$ of at most $M$ vertices spans at most $|S|$ edges,
+written $\sum_{x\in S}|N(x)\cap S|\le2|S|$. $G$ \emph{has an $\ell$-cycle} if there is an injective
+$c:\Z/\ell\Z\to V$ with $c(i)\sim c(i+1)$ for all $i$.
+\end{definition}
+
+\begin{lemma}[\leanname{injOn\_of\_closed}, \leanname{induced\_of\_grow}]\label{lem:grow}
+Let $h:Q\to G$ be a graph homomorphism injective on each neighbourhood, and let $d$ be a depth
+function on $Q$ such that every vertex of positive depth has exactly one neighbour of smaller
+depth and none of equal depth. Suppose $h$ is injective on the depth-$0$ layer $P_0$, $Q[P_0]$
+spans $|P_0|$ edges, and $G$ is $|V(Q)|$-sparse. Then $h$ is injective and induced.
+\end{lemma}
+\begin{proof}
+Add vertices one at a time in order of depth. Each addition adds one vertex and one edge, so a
+set grown this way spans exactly as many edges as vertices. Sparsity then forces the image of a
+new vertex to be new, and forbids extra edges (\leanname{nbr\_image\_eq}).
+\end{proof}
+
+\begin{theorem}[\leanname{exists\_inducedCopy}]\label{thm:ext}
+If $G$ is $3$-regular, has an $\ell$-cycle ($\ell\ge3$) and is $2^R\ell$-sparse ($R\ge1$), then $G$
+contains $\Q$ as an induced subgraph.
+\end{theorem}
+\begin{proof}
+Map the cycle onto the given cycle, each pendant vertex onto the third neighbour of the cycle
+vertex (\leanname{pendant}), and each tree vertex onto one of the two unused neighbours of the
+image of its parent (\leanname{child0}, \leanname{child1}, \leanname{treeMap}, \leanname{embed}).
+Lemma~\ref{lem:grow}, with $d$ the depth in $\Q$, finishes the proof.
+\end{proof}
+
+%=====================================================================
+\section{The configuration model (\lfile{ConfigModel.lean})}
+
+\begin{definition}[\leanname{CM.matchings}, \leanname{CM.Half}, \leanname{CM.cgraph}, \leanname{CM.IsSimple}]
+A \emph{pairing} of a finite set is a fixed-point-free involution. The $3n$ half-edges are the
+pairs $(v,i)$ with $i\in\{0,1,2\}$; a pairing $\sigma$ of them has underlying graph
+$u\sim v\iff u\ne v$ and some half-edge of $u$ is paired with one of $v$. It is \emph{simple} if
+it has no loops and no multiple edges.
+\end{definition}
+
+\begin{lemma}[\leanname{CM.card\_fixes\_mul}, \leanname{CM.card\_fixes\_le}]
+For $k$ disjoint pairs in a set of size $N$, the pairings containing all of them form a fraction
+$1/\bigl((N-1)(N-3)\cdots(N-2k+1)\bigr)$ of all pairings; in particular at most $(N-2k)^{-k}$.
+\end{lemma}
+\begin{proof}
+Adding one pair $(a,b)$ divides the count by the number of admissible partners of $a$:
+conjugating by the transposition $(b\,c)$ moves the pairings with $a\mapsto b$ bijectively onto
+those with $a\mapsto c$ (\leanname{CM.card\_fixes\_cons}).
+\end{proof}
+
+\begin{lemma}[\leanname{CM.degree\_cgraph}, \leanname{CM.card\_fibre}, \leanname{CM.card\_simple\_filter}]
+The graph of a simple pairing is $3$-regular. Every $3$-regular graph on $n$ vertices is the graph
+of exactly $6^n$ simple pairings. Hence, for every property $P$,
+$\#\{\sigma\text{ simple}:P(\text{graph of }\sigma)\}=6^n\,\#\{G\text{ $3$-regular}:P(G)\}$: the
+uniform $3$-regular graph is the configuration model conditioned on being simple.
+\end{lemma}
+\begin{proof}
+A simple pairing over $G$ is the same as a labelling, at each vertex, of its three half-edges by
+its three neighbours (\leanname{CM.fibreEquiv}); there are $3!$ choices per vertex.
+\end{proof}
+
+\begin{lemma}[\leanname{CM.exists\_pairs}, \leanname{CM.card\_bad\_le}]
+If a set $S$ spans more than $|S|$ edges of the graph of a simple pairing $\sigma$, then $\sigma$
+contains $|S|+1$ disjoint pairs of half-edges of $S$. Consequently, for $n\ge2M+2$, the fraction
+of pairings that are simple and not $M$-sparse is at most $K_M/n$, with
+$K_M=\sum_{s=0}^M(9s^2)^{s+1}$.
+\end{lemma}
+\begin{proof}
+There are at most $n^s$ sets of size $s$ and $(9s^2)^{s+1}$ choices of $s+1$ pairs inside them,
+each present with probability at most $(2n)^{-(s+1)}$.
+\end{proof}
+
+%=====================================================================
+\section{Lemma 2.2 (\lfile{GadgetCount.lean})}
+
+\begin{axiom}[\leanname{Random.cycles\_poisson}]\label{ax:cycles}
+For $\ell\ge3$ and every $\kappa>e^{-\lambda_\ell}$, $\lambda_\ell=2^{\ell-1}/\ell$
+(\leanname{Random.poissonMean}), for all sufficiently large even $n$,
+$\PP(\Gnt\text{ has no $\ell$-cycle})\le\kappa$.
+\end{axiom}
+\noindent The number of $\ell$-cycles of $\Gnt$ converges to a Poisson variable of mean
+$\lambda_\ell$: B.~Bollob\'as (1980); N.~Wormald (1981).
+
+\begin{axiom}[\leanname{Random.simple\_prob\_pos}]\label{ax:simple}
+There is $c>0$ such that for all sufficiently large even $n$, a uniformly random pairing of the
+$3n$ half-edges is simple with probability at least $c$.
+\end{axiom}
+\noindent The probability tends to $e^{-2}$: E.~Bender and R.~Canfield (1978); B.~Bollob\'as
+(1980).
+
+\begin{lemma}[\leanname{Random.sparse\_whp}]
+For every $M$ and $\eta>0$, for all sufficiently large even $n$,
+$\PP(\Gnt\text{ is not $M$-sparse})\le\eta$.
+\end{lemma}
+\begin{proof}
+By \leanname{CM.card\_simple\_filter} this probability is the fraction of simple pairings whose
+graph is not $M$-sparse, which is at most $(K_M/n)/c$ by \leanname{CM.card\_bad\_le} and
+Assumed result~\ref{ax:simple}.
+\end{proof}
+
+\begin{lemma}[\leanname{Random.gadgetBall\_whp}]
+For fixed $\ell\equiv0\pmod4$, $R\ge1$ and every $\kappa>e^{-\lambda_\ell}$, for all sufficiently
+large even $n$, $\PP(\Gnt\text{ does not contain $\Q$ as an induced subgraph})\le\kappa$.
+\end{lemma}
+\begin{proof}
+On the event that $\Gnt$ is $3$-regular, has an $\ell$-cycle and is $2^R\ell$-sparse, it contains
+an induced $\Q$ by Theorem~\ref{thm:ext}. Bound the complement by Assumed
+result~\ref{ax:cycles} and \leanname{Random.sparse\_whp}.
+\end{proof}
+
+\begin{theorem}[Lemma 2.2; \leanname{Random.gadgetcount}]
+Let $R(\cdot)$ be any function with $R(\ell)\ge1$. For every $\kappa>0$, for all sufficiently large
+even $n$, with probability at least $1-\kappa$ there is $\ell=4k$, $k\ge1$, such that
+$Q_{\ell,R(\ell)}$ is an induced subgraph of $\Gnt$.
+\end{theorem}
+\begin{proof}
+Choose $\ell_0\equiv0\pmod4$ with $e^{-\lambda_{\ell_0}}<\kappa$ (\leanname{Random.exists\_ell}, since
+$\lambda_{4(k+1)}\ge k+1$), and apply \leanname{Random.gadgetBall\_whp} with $R=R(\ell_0)$.
+\end{proof}
+
+%=====================================================================
+\section{Theorem 1.2 (\lfile{Main.lean})}
+
+\begin{lemma}[\leanname{hess\_spectral\_bound}]
+If $\cos(\theta_u-\theta_v)\ge\sin\delta\ge0$ on every edge and $G$ has spectral gap $\gamma$, then
+$\langle x,H(\theta)x\rangle\ge\sin\delta\cdot\gamma\,\|x\|^2$ for all $x\perp\one$.
+\end{lemma}
+
+\begin{proposition}[\leanname{not\_globallySynchronizing\_of\_gadgetBall}]
+Let $G$ be $3$-regular with spectral gap $\gamma>0$, $\ell\equiv0\pmod4$, $\delta\in(0,\delta_0]$,
+$R\ge R_0(\sin\delta\cdot\gamma,\delta,\ell)$, and suppose $G$ contains $\Q$ as an induced subgraph.
+Then $G$ is not globally synchronizing.
+\end{proposition}
+\begin{proof}
+By Proposition~\ref{prop:21iii}, $|\Delta_e(\hat\theta)|\le\eta^*(R)\le\pi/2-\delta$ on every edge,
+so $\cos\Delta_e(\hat\theta)\ge\sin\delta$ and $\lambda_2(H(\hat\theta))\ge\sin\delta\cdot\gamma$.
+Apply \leanname{glue\_consequently}.
+\end{proof}
+
+\begin{lemma}[\leanname{prob\_globallySynchronizing\_le}]
+For every $\kappa>0$, for all sufficiently large even $n$,
+$\PP(\Gnt\text{ is globally synchronizing})\le\kappa$.
+\end{lemma}
+\begin{proof}
+Take $\delta=\delta_0$, $\gamma=\frac12(3-2\sqrt2)$, $\mu=\sin\delta\cdot\gamma$ and
+$R(\ell)=R_0(\mu,\delta,\ell)$. Let $A^1_n$ be the event that $Q_{\ell,R(\ell)}$ is an induced
+subgraph for some $\ell=4k$, and $A^2_n$ the event $\lambda_2(A)\le2\sqrt2+\gamma$. On
+$A^1_n\cap A^2_n$ the graph is not globally synchronizing, by the previous proposition and
+\leanname{Random.spectralGap\_of\_lambda2}. Each complement has probability at most $\kappa/2$, by
+\leanname{Random.gadgetcount} and Assumed result~\ref{ax:friedman}.
+\end{proof}
+
+\begin{theorem}[Theorem 1.2; \leanname{main\_theorem}]\label{thm:main}
+$\displaystyle\lim_{n\to\infty}\PP\bigl(G_{2n,3}\text{ is not globally synchronizing}\bigr)=1.$
+\end{theorem}
+\begin{proof}
+The probability is at most $1$, and by the previous lemma at least $1-\kappa$ for all large $n$,
+for every $\kappa>0$.
+\end{proof}
+
+\end{document}

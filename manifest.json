@@ -1,0 +1,100 @@
+{
+  "paper": "Random 3-regular graphs are not globally synchronizing",
+  "axioms": [
+    "Kuramoto.NK.newton_kantorovich",
+    "Kuramoto.Random.friedman",
+    "Kuramoto.Random.cycles_poisson",
+    "Kuramoto.Random.simple_prob_pos"
+  ],
+  "chapters": [
+    {
+      "id": "main-theorem",
+      "title": "Theorem 1.2",
+      "paper_ref": "Theorem 1.2",
+      "lean_path": "Kuramoto/Main.lean",
+      "target_theorems": ["Kuramoto.main_theorem", "Kuramoto.prob_globallySynchronizing_le",
+        "Kuramoto.not_globallySynchronizing_of_gadgetBall"]
+    },
+    {
+      "id": "model",
+      "title": "The Kuramoto model on a finite graph",
+      "paper_ref": "Section 1, eqs. (2)-(3), Definition 1.1",
+      "lean_path": "Kuramoto/Basic.lean",
+      "target_theorems": ["Kuramoto.energy", "Kuramoto.grad", "Kuramoto.hess",
+        "Kuramoto.phaseDiff", "Kuramoto.StableEquilibrium", "Kuramoto.GloballySynchronizing",
+        "Kuramoto.quadForm_hess", "Kuramoto.phaseCohesive_iff"]
+    },
+    {
+      "id": "stability-criterion",
+      "title": "Stability criterion",
+      "paper_ref": "Proposition 1.3",
+      "lean_path": "Kuramoto/Certificate.lean",
+      "target_theorems": ["Kuramoto.prop_cert", "Kuramoto.not_globallySynchronizing_of_certificate"]
+    },
+    {
+      "id": "gadget",
+      "title": "The gadget Q_{l,R} and its equilibrium",
+      "paper_ref": "Section 2, Proposition 2.1",
+      "lean_path": "Kuramoto/Gadget.lean",
+      "target_theorems": ["Kuramoto.Gadget.Q", "Kuramoto.Gadget.phase",
+        "Kuramoto.Gadget.grad_eq_zero_of_nonleaf", "Kuramoto.Gadget.phaseCohesive_phase",
+        "Kuramoto.Gadget.abs_phaseDiff_phase_le", "Kuramoto.Gadget.absDelta_branch",
+        "Kuramoto.Gadget.exists_unique_root", "Kuramoto.Gadget.etabounds"]
+    },
+    {
+      "id": "kantorovich",
+      "title": "Kantorovich's theorem and the Lipschitz Hessian",
+      "paper_ref": "Theorem 3.1, Lemma 3.2",
+      "lean_path": "Kuramoto/Kantorovich.lean",
+      "target_theorems": ["Kuramoto.NK.newton_kantorovich", "Kuramoto.lipschitz_hess"]
+    },
+    {
+      "id": "transplant",
+      "title": "The configuration theta-hat in G",
+      "paper_ref": "Section 3, proof of Proposition 3.3",
+      "lean_path": "Kuramoto/Transplant.lean",
+      "target_theorems": ["Kuramoto.transplant", "Kuramoto.isGadgetBall_of_induced",
+        "Kuramoto.grad_transplant_eq_zero_of_induced", "Kuramoto.norm_grad_transplant_le"]
+    },
+    {
+      "id": "correction",
+      "title": "Correcting theta-hat to a stable equilibrium",
+      "paper_ref": "Proposition 3.3",
+      "lean_path": "Kuramoto/Correction.lean",
+      "target_theorems": ["Kuramoto.glue", "Kuramoto.glue_consequently",
+        "Kuramoto.kantorovich_step", "Kuramoto.norm_hessL_sub_le"]
+    },
+    {
+      "id": "random-graph",
+      "title": "The random 3-regular graph and Friedman's theorem",
+      "paper_ref": "Proof of Theorem 1.2 (event A_n^2)",
+      "lean_path": "Kuramoto/RandomGraph.lean",
+      "target_theorems": ["Kuramoto.Random.Gnt", "Kuramoto.Random.lambda2",
+        "Kuramoto.Random.friedman", "Kuramoto.Random.spectralGap_of_lambda2"]
+    },
+    {
+      "id": "extension",
+      "title": "Extending a cycle to an induced Q_{l,R}",
+      "paper_ref": "Proof of Lemma 2.2 (extension step)",
+      "lean_path": "Kuramoto/Extension.lean",
+      "target_theorems": ["Kuramoto.exists_inducedCopy"]
+    },
+    {
+      "id": "configuration-model",
+      "title": "The configuration model and the first-moment bound",
+      "paper_ref": "Proof of Lemma 2.2 (configuration model)",
+      "lean_path": "Kuramoto/ConfigModel.lean",
+      "target_theorems": ["Kuramoto.CM.card_fixes_mul", "Kuramoto.CM.card_simple_filter",
+        "Kuramoto.CM.card_bad_le"]
+    },
+    {
+      "id": "gadget-count",
+      "title": "Q_{l,R} appears as an induced subgraph",
+      "paper_ref": "Lemma 2.2",
+      "lean_path": "Kuramoto/GadgetCount.lean",
+      "target_theorems": ["Kuramoto.Random.gadgetcount", "Kuramoto.Random.gadgetBall_whp",
+        "Kuramoto.Random.sparse_whp", "Kuramoto.Random.cycles_poisson",
+        "Kuramoto.Random.simple_prob_pos"]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use this formalization, please cite the paper below."
+title: "Random 3-regular graphs are not globally synchronizing: Lean formalization"
+type: software
+authors:
+  - family-names: "Carvallo"
+    given-names: "Ciro"
+  - family-names: "Groisman"
+    given-names: "Pablo"
+  - family-names: "Mitsche"
+    given-names: "Dieter"
+abstract: >-
+  A Lean 4 / Mathlib formalization of the theorem that a uniformly random simple 3-regular
+  graph is, with probability tending to one, not globally synchronizing for the Kuramoto model.
+license: "Apache-2.0"
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "Carvallo"
+      given-names: "Ciro"
+    - family-names: "Groisman"
+      given-names: "Pablo"
+    - family-names: "Mitsche"
+      given-names: "Dieter"
+  title: "Random 3-regular graphs are not globally synchronizing"
+  url: "https://arxiv.org/abs/2610.09135"
+  identifiers:
+    - type: doi
+      value: "10.48550/arXiv.2610.09135"
+  year: 2026
